@@ -1,0 +1,134 @@
+# Default values for service.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: us.gcr.io/tradingfoe/devops
+  tag: nginx-proxy-0.4.0
+  pullPolicy: IfNotPresent
+
+# nameOverride: nginx-proxy
+# fullnameOverride: nginx-proxy
+
+deployment:
+  livenessProbe:
+    enabled: false
+    path: /healthz
+    config: {}
+      # initialDelaySeconds: 30
+      # periodSeconds: 10
+      # timeoutSeconds: 1
+      # successThreshold: 1
+      # failureThreshold: 1
+  readinessProbe:
+    enabled: false
+    path: /healthz
+    config:
+      # initialDelaySeconds: 30
+      # periodSeconds: 30
+      # timeoutSeconds: 1
+      # successThreshold: 1
+      # failureThreshold: 3
+  secretRef:
+    enabled: false
+    name: nginx-proxy
+  env:
+    enabled: true
+    vars:
+      ENTRYPOINT_ARG: "kibana.trfstg.com=http://logmanage-kibana:5601 testing.trfstg.com=http://trfstg.com"
+
+  files:
+    default.template: |
+      server {
+        listen 80;
+        server_name {{proxy_url}};
+
+        location /oauth2/ {
+          proxy_pass       http://proxy-stack-oauth2-proxy;
+          proxy_set_header Host                    $host;
+          proxy_set_header X-Real-IP               $remote_addr;
+          proxy_set_header X-Scheme                $scheme;
+          proxy_set_header X-Auth-Request-Redirect $request_uri;
+        }
+        location = /oauth2/auth {
+          proxy_pass       http://proxy-stack-oauth2-proxy;
+          proxy_set_header Host             $host;
+          proxy_set_header X-Real-IP        $remote_addr;
+          proxy_set_header X-Scheme         $scheme;
+          # nginx auth_request includes headers but not body
+          proxy_set_header Content-Length   "";
+          proxy_pass_request_body           off;
+        }
+
+        location / {
+          auth_request /oauth2/auth;
+          error_page 401 = /oauth2/sign_in;
+
+          # pass information via X-User and X-Email headers to backend,
+          # requires running with --set-xauthrequest flag
+          auth_request_set $user   $upstream_http_x_auth_request_user;
+          auth_request_set $email  $upstream_http_x_auth_request_email;
+          proxy_set_header X-User  $user;
+          proxy_set_header X-Email $email;
+
+          # if you enabled --cookie-refresh, this is needed for it to work with auth_request
+          #auth_request_set $auth_cookie $upstream_http_set_cookie;
+          #add_header Set-Cookie $auth_cookie;
+
+          proxy_pass {{proxy_pass_url}};
+          # or "root /path/to/site;" or "fastcgi_pass ..." etc
+        }
+      }
+
+
+service:
+  type: NodePort
+  port: 80
+
+job:
+  enabled: false
+  # annotations:
+  #   "helm.sh/hook": pre-upgrade
+  #   "helm.sh/hook-weight": "-5"
+  #   "helm.sh/hook-delete-policy": "hook-succeeded,before-hook-creation"
+  # command:
+  #   - /bin/sh
+  #   - -exc
+  #   - bundle exec rake db:migrate && bundle exec rake db:seed
+
+ingress:
+  enabled: true
+  annotations:
+    kubernetes.io/ingress.class: traefik
+  hosts:
+    - host: kibana.trfstg.com
+      paths:
+        - /
+    - host: testing.trfstg.com
+      paths:
+        - /
+
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

@@ -1,0 +1,9 @@
+dependencies:
+  - name: nginx-proxy
+    version: 0.1.0
+    repository: file://../chart/nginx-proxy
+    condition: nginx-proxy.enabled
+  - name: oauth2-proxy
+    version: 0.13.0
+    repository: file://../chart/oauth2-proxy
+    condition: oauth2-proxy.enabled

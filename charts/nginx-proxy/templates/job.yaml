@@ -1,0 +1,40 @@
+{{- if .Values.job.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "{{ include "service.fullname" . }}-preprare-job"
+  labels:
+    app.kubernetes.io/name: {{ include "service.name" . }}
+    helm.sh/chart: {{ include "service.chart" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- with .Values.job.annotations }}
+  annotations:
+{{ toYaml . | trim | indent 4 }}
+{{- end }}
+spec:
+  template:
+    spec:
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        command:
+          {{- range $line := .Values.job.command }}
+            - "{{ $line }}"
+          {{- end }}
+        {{- if .Values.deployment.secretRef.enabled }}
+        envFrom:
+          - secretRef:
+              name: {{ .Values.deployment.secretRef.name }}
+        {{- end }}
+        {{- if .Values.deployment.env.enabled }}
+        env:
+          {{- range $key, $val := .Values.deployment.env.vars }}
+          - name: {{ $key }}
+            value: {{ $val | quote }}
+          {{- end }}
+        {{- end }}
+      restartPolicy: Never
+{{- end }}
+
